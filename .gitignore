@@ -2,6 +2,6 @@
 *.ttc
 *.ttm
 
-# Idris 1
-*.ibc
-*.o
+
+build/
+.DS_Store

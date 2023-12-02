@@ -1,0 +1,3 @@
+package hello
+authors = "Yuan Ji"
+sourcedir = "src"
