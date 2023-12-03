@@ -4,7 +4,6 @@ import Data.List
 import Data.List1
 import Data.Maybe
 import Data.String
-
 import System.File
 
 data CubeColor = Red | Green | Blue
@@ -24,7 +23,8 @@ parseColor str =
         _ => Nothing
 
 parseId : String -> Maybe Integer
-parseId str = parseInteger $ snd $ break isSpace $ fst $ break (== ':') str
+parseId str =
+    parseInteger $ snd $ break isSpace $ fst $ break (== ':') str
 
 ||| parse string like `3 red` and return cube color with number of cubes
 parseCubes : String -> Maybe (CubeColor, Integer) 
@@ -37,21 +37,16 @@ parseCubes str =
 
 parseHandful : String -> Maybe HandfulCubes
 parseHandful handfulStr =
-    do
-        foldlM
-            (\handful, str => do 
-                (color, num) <- parseCubes $ trim str
-                case color of
-                    Red => pure $ { red := num } handful
-                    Green => pure $ { green := num } handful
-                    Blue => pure $ { blue := num } handful
-            )
-            (MkHandfulCubes 0 0 0)
-            (forget $ split (==',') $ trim handfulStr)
-
-
-limit : HandfulCubes
-limit = (MkHandfulCubes 12 13 14)
+    foldlM
+        (\handful, str => do 
+            (color, num) <- parseCubes $ trim str
+            case color of
+                Red => pure $ { red := num } handful
+                Green => pure $ { green := num } handful
+                Blue => pure $ { blue := num } handful
+        )
+        (MkHandfulCubes 0 0 0)
+        (forget $ split (==',') $ trim handfulStr)
 
 getHandfulsLine : String -> Maybe String
 getHandfulsLine line =
@@ -61,6 +56,10 @@ getHandfulsLine line =
 -- -------------------------
 -- PART I
 
+limit : HandfulCubes
+limit = (MkHandfulCubes 12 13 14)
+
+||| parse one game line and return game id if cubes are not over limit
 parseOneGame : String -> Maybe Integer
 parseOneGame line =
     do
@@ -74,15 +73,6 @@ parseOneGame line =
             True
             (forget $ split (== ';') $ handfuls)
         if valid then pure lineId else Nothing
-
-calculate1 : (path : String) -> IO (Either FileError Integer)
-calculate1 path = withFile path Read pure (go 0)
-  where covering go : Integer -> File -> IO (Either FileError Integer)
-        go k file = do
-          False <- fEOF file | True => pure (Right k)
-          Right line <- fGetLine file
-            | Left err => pure (Left err)
-          go (k + (fromMaybe 0 $ parseOneGame line)) file
 
 partOne : String -> Integer
 partOne line =
@@ -116,25 +106,22 @@ partTwo: String -> Integer
 partTwo =
     calculatePower . parseOneGame2
 
-
-calculate : (String -> Integer) -> (path : String) -> IO (Either FileError Integer)
-calculate f path = withFile path Read pure (go 0)
-  where covering go : Integer -> File -> IO (Either FileError Integer)
-        go k file = do
-          False <- fEOF file | True => pure (Right k)
-          Right line <- fGetLine file
-            | Left err => pure (Left err)
-          go (k + (f line)) file
-
+-- Main
 
 doExercise : (String -> Integer) -> (path : String) -> (msg : String) -> IO ()
 doExercise f path msg =
-    do
-        res <- (calculate f path)
-        case res of
+    let
+        go : Integer -> File -> IO (Either FileError Integer)
+        go k file = do
+            False <- fEOF file | True => pure (Right k)
+            Right line <- fGetLine file
+                | Left err => pure (Left err)
+            go (k + (f line)) file
+    in do
+        result <- withFile path Read pure (go 0)
+        case result of
             (Left err) => (printLn err)
             (Right n) => printLn $ msg ++ (cast n)
-
 
 main : IO ()
 main = do
