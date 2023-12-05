@@ -11,7 +11,6 @@ record AMap where
     srcStart : Integer
     range : Integer
 
-
 mapNum : Integer -> AMap -> Maybe Integer
 mapNum src m =
     if src >= m.srcStart && src < m.srcStart + m.range then Just (src + m.desStart - m.srcStart) else Nothing
@@ -53,14 +52,14 @@ parseFile : (path : String) -> IO (List Integer, List (List AMap))
 parseFile path =
     let
         go : List AMap -> (List Integer, List (List AMap)) -> File -> IO (Either FileError (List Integer, List (List AMap)))
-        go accMap r@(seeds, maps) file = do
-            False <- fEOF file | True => pure (Right r)
+        go accMap (seeds, maps) file = do
+            False <- fEOF file | True => pure (Right (reverse seeds, reverse maps))
             Right line <- fGetLine file
                 | Left err => pure (Left err)
             if isPrefixOf "seeds: " line
-                then go [] (reverse $ parseSeeds $ snd $ break (isSpace) line, []) file
+                then go [] (parseSeeds $ snd $ break (isSpace) line, []) file
                 else case parseAMap line of
-                    Nothing => go [] (seeds, accMap :: maps) file 
+                    Nothing => go [] (seeds, (if isNil accMap then maps else accMap :: maps)) file 
                     Just map => go (map :: accMap) (seeds, maps) file
     in do
         result <- withFile path Read pure (go [] ([], []))
@@ -70,13 +69,12 @@ parseFile path =
 
 -- PART I
 
-minInteger : List Integer -> Integer
-minInteger is =
-    foldl (\r, i => min r i) 99999999999999 is
+calculate1 : Integer -> List Integer -> List (List AMap) -> Integer
+calculate1 minResult seeds chains =
+    foldl (\acc, seed => min (mapChain seed chains) acc) minResult seeds
 
-calculate1 : List Integer -> List (List AMap) -> Integer
-calculate1 seeds chains = minInteger $
-    foldl (\acc, seed => (mapChain seed chains) :: acc) [] seeds
+partOne  : List Integer -> List (List AMap) -> Integer
+partOne seeds chains = calculate1 99999999999 seeds chains
 
 
 -- PART II
@@ -85,23 +83,22 @@ pairSeeds : List Integer -> List (Integer, Integer)
 pairSeeds (x :: y :: xs) = (x, y) :: pairSeeds xs
 pairSeeds _ = []
 
-calRange : List Integer -> Integer -> Integer -> List (List AMap) -> List Integer
-calRange acc seed 0 chains = acc
-calRange acc seed range chains = calRange ((mapChain seed chains) :: acc) (seed +1) (range - 1) chains
+calRange : Integer -> Integer -> Integer -> List (List AMap) -> Integer
+calRange minResult seed 0 chains = minResult
+calRange minResult seed range chains = calRange (min (mapChain seed chains) minResult) (seed +1) (range - 1) chains
 
-calculate2 : List (Integer, Integer) -> List (List AMap) -> Integer
-calculate2 seeds chains = minInteger $
-    foldl (\acc, (seed, range) => (minInteger $ calRange [] seed range chains) :: acc) [] seeds
+
+calculate2 : Integer -> List (Integer, Integer) -> List (List AMap) -> Integer
+calculate2 minResult seeds chains = 
+    foldl (\acc, (seed, range) => min (calRange acc seed range chains) acc) minResult seeds
+
+partTwo : List Integer -> List (List AMap) -> Integer
+partTwo seedRanges mapChains = calculate2 99999999999 (pairSeeds seedRanges) mapChains
 
 -- Main
-
-prn : List Integer -> String
-prn [] = ""
-prn (x::xs) = (cast x) ++ "," ++ prn xs
 
 main : IO ()
 main = do
     (seeds, mapsChain) <- parseFile "src/day05/input.txt"
-    -- printLn $ "Seeds: " ++ prn seeds
-    printLn $ "I Lowest location number: " ++ cast (calculate1 seeds (reverse mapsChain))
-    printLn $ "II Lowest location number: " ++ cast (calculate2 (pairSeeds $ seeds) (reverse mapsChain))
+    printLn $ "Part  I Lowest location number: " ++ cast (partOne seeds mapsChain)
+    printLn $ "Part II Lowest location number: " ++ cast (partTwo seeds mapsChain)
