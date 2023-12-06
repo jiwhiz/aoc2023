@@ -95,10 +95,43 @@ calculate2 minResult seeds chains =
 partTwo : List Integer -> List (List AMap) -> Integer
 partTwo seedRanges mapChains = calculate2 99999999999 (pairSeeds seedRanges) mapChains
 
+
+-- Much faster algorithm
+scan : (Integer, Integer) -> List AMap -> List (Integer, Integer) -> List (Integer, Integer)
+scan block [] acc = block :: acc
+scan (start, width) ((MkAMap desStart srcStart range) :: xs) acc =
+    if (start < srcStart && start + width > srcStart + range) -- totally cover, split to three pieces
+        then (desStart, range) :: (scan (start, srcStart - start) xs acc ++ scan (srcStart + range, start + width - srcStart - range) xs acc)
+        else if start < srcStart && start + width > srcStart && start + width < srcStart + range -- left overlap
+            then (desStart, start + width - srcStart) :: scan (start, srcStart - start) xs acc  -- split, return overlapping part, scan left cut off 
+            else if start >= srcStart && start < srcStart + range && start + width > srcStart + range -- right overlap
+                then (desStart + start - srcStart, srcStart + range - start) :: scan (srcStart + range, start +width - srcStart - range) xs acc  -- split, return overlapping part, scan right cut off
+                else if (start >= srcStart && start + width <= srcStart + range) --  within map
+                    then [(start + desStart - srcStart, width)] -- map to destination directly
+                    else scan (start, width) xs acc -- skip this map, continue remaining maps
+
+chainScan : (Integer, Integer) -> List (List AMap) -> List (Integer, Integer)
+chainScan block [] = [block]
+chainScan block (x::xs) =
+    let l := scan block x []
+    in foldl (\acc, b => acc ++ chainScan b xs) [] l
+
+minInteger : List Integer -> Integer
+minInteger is =
+    foldl (\r, i => min r i) 99999999999999 is
+
+calculate' : List (Integer, Integer) -> List (List AMap) -> Integer
+calculate' blocks chains =
+     foldl (\acc, block => min (minInteger (map fst $ chainScan block chains)) acc) 9999999999 blocks
+
+
+partTwo' : List Integer -> List (List AMap) -> Integer
+partTwo' seedRanges mapChains = calculate' (pairSeeds seedRanges) mapChains
+
 -- Main
 
 main : IO ()
 main = do
     (seeds, mapsChain) <- parseFile "src/day05/input.txt"
     printLn $ "Part  I Lowest location number: " ++ cast (partOne seeds mapsChain)
-    printLn $ "Part II Lowest location number: " ++ cast (partTwo seeds mapsChain)
+    printLn $ "Part II Lowest location number: " ++ cast (partTwo' seeds mapsChain)
