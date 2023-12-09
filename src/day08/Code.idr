@@ -155,7 +155,7 @@ covering
 main : IO ()
 main =
     do 
-        lines <- Util.parseFile "src/Day08/input.txt"
+        lines <- Util.parseFile "src/day08/input.txt"
         case lines of
             (instrLine :: _ :: mapLines) => 
                 let map := parseMap mapLines

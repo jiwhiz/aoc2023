@@ -1,5 +1,6 @@
 module Util
 
+import Data.String
 import System.File
 
 export covering
@@ -17,3 +18,16 @@ parseFile path =
         case result of
             (Left err) => pure []
             (Right lines) => pure $ reverse lines
+
+||| parse list of integers separated by space
+export
+parseIntegers : String -> List Integer
+parseIntegers str = reverse $ 
+    foldl
+        (\acc, elm =>
+            case parseInteger elm of
+                Just v => v :: acc
+                Nothing => acc
+        )
+        []
+        (words str)
