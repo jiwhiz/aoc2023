@@ -2,50 +2,53 @@ module Main
 
 import Data.List1
 import Data.Maybe
+import Data.Vect
 import Util
 
 %default total
 
-diff : List Integer -> Maybe (List Integer)
-diff (x1 :: [x2]) = Just [x2-x1]
-diff (x1 :: x2 :: xs) = do 
-    tail <- diff (x2 :: xs)
-    pure $ (x2 - x1) :: tail
-diff _ = Nothing
-
-sameValue : Integer -> List Integer -> Bool
+sameValue : Integer -> Vect _ Integer -> Bool
 sameValue i [] = True
 sameValue i (y :: ys) = if i /= y then False else sameValue i ys
 
-partial
-calculate : (List1 Integer -> Integer -> Integer) -> List Integer -> Maybe Integer
-calculate f [] = Nothing
-calculate f input@(x :: xs) =
-    if sameValue x xs then Just x
+diff : {k: Nat} -> Vect (S (S k)) Integer -> Vect (S k) Integer
+diff (x1 :: [x2]) = [x2-x1]
+diff (x1 :: x2 :: x3 :: xs) = (x2 - x1) :: diff (x2 :: x3 :: xs)
+
+extrapolate
+     : {n : Nat}
+    -> ({m : Nat} -> Vect (S m) Integer -> Integer -> Integer)
+    -> Vect (S (S n)) Integer
+    -> Maybe Integer
+extrapolate {n=Z} _ (x1 :: [x2]) = if x1 == x2 then Just x1 else Nothing
+extrapolate {n=(S k)} f input@(x1 :: x2 :: x3 :: xs) = 
+    if sameValue x1 (x2 :: x3 :: xs) then Just x1 
     else do
-        nextSeq <- diff input
-        value <- calculate f nextSeq 
-        pure $ f (x:::xs) value
+        value <- extrapolate f $ diff input
+        pure $ f {m=(S (S k))} input value
 
-f1 : List1 Integer -> Integer -> Integer
-f1 list value = value + (head $ reverse list)
+calculate : ({m : Nat} -> Vect (S m) Integer -> Integer -> Integer) -> List String -> Integer
+calculate f lines =
+    foldl (\acc, line => acc + fromMaybe 0 (handle line)) 0 lines
+    where
+        handle : String -> Maybe Integer
+        handle str =
+            case parseIntegers str of
+                l@(l1 :: l2 :: ls) => do
+                    numbers <- toVect (S (S (length ls))) l
+                    extrapolate {n=length ls} f numbers
+                _ => Nothing
 
-partial
-partOne : List String -> Integer
-partOne lines = foldl (\acc, line => acc + fromMaybe 0 (calculate f1 $ parseIntegers line)) 0 lines
+f1 : {m : Nat} -> Vect (S m) Integer -> Integer -> Integer
+f1 list value = value + (head . reverse) list
 
-f2 : List1 Integer -> Integer -> Integer
-f2 input value = head input - value
+f2 : {m : Nat} -> Vect (S m) Integer -> Integer -> Integer
+f2 list value = head list - value
 
-partial
-partTwo : List String -> Integer
-partTwo lines = foldl (\acc, line => acc + fromMaybe 0 (calculate f2 $ parseIntegers line)) 0 lines
-
--- -- Main
 covering
 main : IO ()
 main =
     do 
         lines <- Util.parseFile "src/day09/input.txt"
-        printLn $ "Part I result: " ++ (show $ partOne lines)
-        printLn $ "Part II result: " ++ (show $ partTwo lines)
+        printLn $ "Part I result: " ++ (show $ calculate f1 lines)
+        printLn $ "Part II result: " ++ (show $ calculate f2 lines)
