@@ -1,21 +1,19 @@
 module Main
 
-import Data.List
-import Data.List1
-import Data.Maybe
 import Data.Vect
 import Util
 
 %default total
 
-diff : {k: Nat} -> Vect (S k) Integer -> Vect k Integer
-diff {k=Z} [x] = []
-diff {k=S Z} (x1 :: [x2]) = [x2-x1]
-diff {k=S m} (x1 :: x2 :: xs) = (x2 - x1) :: diff {k=m} (x2 :: xs)
+||| calculate the difference values of the sequence
+diff : Vect (S k) Integer -> Vect k Integer
+diff [x] = []
+diff (x1 :: x2 :: xs) = (x2 - x1) :: diff (x2 :: xs)
 
-extrapolate : {n : Nat} -> Vect n Integer -> Integer
-extrapolate {n=Z} [] = 0
-extrapolate {n=S m} input@(x::xs) = (head . reverse) input + extrapolate (diff {k=m} input)
+||| extrapolated value of each line is the last numebr plus the extrapolated value of diff sequence
+extrapolate : Vect n Integer -> Integer
+extrapolate [] = 0
+extrapolate input@(x::xs) = (head . reverse) input + extrapolate (diff input)
 
 covering
 main : IO ()
@@ -23,6 +21,6 @@ main =
     do 
         lines <- Util.parseFile "src/day09/input.txt"
         printLn $ "Part I result: " ++ 
-            (show $ sum <$> (traverse ( ( (\l => extrapolate <$> (toVect (length l) l)) . parseIntegers) ) lines))
+            (show $ sum <$> (traverse ((\l => extrapolate <$> (toVect (length l) l)) . parseIntegers) lines))
         printLn $ "Part II result: " ++
-            (show $ sum <$> (traverse ( ( (\l => extrapolate <$> (toVect (length l) l)) . reverse . parseIntegers) ) lines))
+            (show $ sum <$> (traverse ((\l => extrapolate <$> (toVect (length l) l)) . reverse . parseIntegers) lines))
