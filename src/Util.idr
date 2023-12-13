@@ -12,7 +12,7 @@ parseFile path =
             False <- fEOF file | True => pure (Right acc)
             Right line <- fGetLine file
                 | Left err => pure (Left err)
-            if (length (trim line) > 0) then go (trim line :: acc) file else go acc file
+            go (trim line :: acc) file
     in do
         result <- withFile path Read pure (go [])
         case result of
