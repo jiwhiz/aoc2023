@@ -30,7 +30,7 @@ parseNumbers str = reverse $
         (forget $ split (',' ==) str)
 
 parseLine : String -> (List Code, List Nat)
-parseLine str = bimap (\codes => parseCode <$> unpack codes) (parseNumbers) $ break isSpace str
+parseLine str = bimap (\codes => parseCode <$> unpack codes) (parseNumbers) $ break isSpace (trim str)
 
 group : List Code -> List Nat
 group codes = walk 0 codes
@@ -74,70 +74,51 @@ algo2 codes numbers = backtrack 0 codes numbers 0
 
 mutual
     go
-        : {len, l : Nat}
-        -> {auto prf: LT l len}
-        -> Vect len (SortedMap (List Nat) Nat)
+        : {l, m : Nat}
+        -> (map : SortedMap (Nat, Nat) Nat)
         -> (codes : Vect l Code)
-        -> (groups : List Nat)
-        -> (k : Nat)
+        -> (groups : Vect m Nat)
         -> (acc : Nat)
-        -> (Nat, Nat, Vect len (SortedMap (List Nat) Nat))
-    go maps [] [] k Z = ((S k), 1, maps)
-    go maps [] [] k (S _) = (k, 0, maps)
-    go maps [] (x::xs) k acc = if acc == x then checkCache maps [] xs k Z else (k, 0, maps)
-    go maps (x :: xs) [] k Z =
+        -> (Nat, SortedMap (Nat, Nat) Nat)
+    go map [] [] Z = (1, map)
+    go map [] [] (S _) = (0, map)
+    go map [] (x::xs) acc = if acc == x then go map [] xs Z else (0, map)
+    go map (x :: xs) [] Z =
         case x of
-            D => (k, 0, maps)
-            _ => checkCache maps xs {prf=lteSuccLeft prf} [] k Z
-    go maps (x :: xs) [] k (S _) = (k, 0, maps)
-    go maps codes@(x :: xs) groups@(y :: ys) k acc =
+            D => (0, map)
+            _ => go map xs [] Z
+    go map (x :: xs) [] (S _) = (0, map)
+    go map codes@(x :: xs) groups@(y :: ys) acc =
         case x of
-            O => if (acc == 0) then checkCache maps xs {prf=lteSuccLeft prf} (y::ys) k Z
-                 else if (acc == y) then checkCache maps xs {prf=lteSuccLeft prf} ys k Z
-                      else (k, 0, maps)
-            D => if (acc < y) then go maps xs {prf=lteSuccLeft prf} (y::ys) k (S acc)
-                 else (k, 0, maps)
-            U => let (sum, _, updatedMaps) := 
-                    if acc == 0 then checkCache maps (D::xs) (y::ys) k Z 
-                        else go maps xs {prf=lteSuccLeft prf} (y::ys) k (S acc)
-                 in if acc == 0 then checkCache updatedMaps (O::xs) (y::ys) sum Z 
-                    else go updatedMaps (O::xs) (y::ys) sum acc
+            O => if (acc == 0) then checkCache map xs groups
+                 else if (acc == y) then checkCache map xs ys
+                      else (0, map)
+            D => if (acc < y) then go map xs groups (S acc)
+                 else (0, map)
+            U => let (sumForD, updatedMap) := go map (D::xs) groups acc
+                 in mapFst (+ sumForD) $ go updatedMap (O::xs) groups acc
 
     checkCache
-        : {len, l : Nat}
-        -> {auto prf: LT l len}
-        -> Vect len (SortedMap (List Nat) Nat)
+         : {l, m : Nat}
+        -> (map : SortedMap (Nat, Nat) Nat)
         -> (codes : Vect l Code)
-        -> (groups : List Nat)
-        -> (k : Nat)
-        -> (acc : Nat)
-        -> (Nat, Nat, Vect len (SortedMap (List Nat) Nat))
-    checkCache maps codes groups k acc = 
-        let map := index (natToFinLT l) maps
-        in case SortedMap.lookup groups map of
+        -> (groups : Vect m Nat)
+        -> (Nat, SortedMap (Nat, Nat) Nat)
+    checkCache map codes groups = 
+        case SortedMap.lookup (l, m) map of
             Nothing => 
-                let (sum, subtotal, updatedMaps) := go maps codes groups k acc
-                    updatedMap := index (natToFinLT l) updatedMaps
-                in
-                    if (subtotal > 0) then (sum, subtotal, replaceAt (natToFinLT l) (insert groups subtotal updatedMap) updatedMaps)
-                    else (sum, subtotal, updatedMaps)
-            Just count => ((count+k), count, maps)
+                let (sum, updatedMap) := go map codes groups Z
+                in (sum, insert (l, m) sum updatedMap)
+            Just count => (count, map)
 
-algo3 : {len:Nat} -> Vect len Code -> List Nat -> Nat 
-algo3 codes numbers = fst $ go (initMaps (S len)) codes {prf=proofLt len} numbers 0 0
-    where
-        initMaps : (l : Nat) -> Vect l (SortedMap (List Nat) Nat)
-        initMaps l = replicate l SortedMap.empty
-
-        proofLt : (l : Nat) -> LT l (S l)
-        proofLt Z = LTESucc LTEZero
-        proofLt (S k) = LTESucc (proofLt k)
+algo3 : {l, m : Nat} -> Vect l Code -> Vect m Nat -> Nat 
+algo3 codes numbers = fst $ go SortedMap.empty codes numbers 0
 
 
 calculate : List (List Code, List Nat) -> Nat
 calculate lines =
     foldl 
-        (\acc, (codes, numbers) => acc + algo3 (fromList codes) numbers)
+        (\acc, (codes, numbers) => acc + algo3 (fromList codes) (fromList numbers))
         0
         lines
 
@@ -153,6 +134,7 @@ main : IO ()
 main =
     do 
         lines <- Util.parseFile "src/day12/input.txt"
-        printLn $ "Part I result: " ++ (show $ calculate $ parseLine <$> (lines))
-        printLn $ "Part II result: " ++ (show $ calculate $ (bimap unfoldCode unfoldNum . parseLine) <$> lines)
+        let codeLines := (filter (\str => length str > 0) lines)
+        printLn $ "Part I result: " ++ (show $ calculate $ parseLine <$> codeLines)
+        printLn $ "Part II result: " ++ (show $ calculate $ (bimap unfoldCode unfoldNum . parseLine) <$> codeLines)
         pure ()
