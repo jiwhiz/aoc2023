@@ -10,18 +10,10 @@ import Data.Vect
 import Decidable.Equality
 import Util
 
-plusSuccRightSucc' : (left, right : Nat) -> left + (S right) = S (left + right)
-plusSuccRightSucc' Z _ = Refl
-plusSuccRightSucc' (S left) right = rewrite plusSuccRightSucc' left right in Refl
-
-plusZeroRightNeutral' : (left : Nat) -> left = left + 0
-plusZeroRightNeutral' Z     = Refl
-plusZeroRightNeutral' (S n) = cong S (plusZeroRightNeutral' n)
-
 tilt : {n,m:Nat} -> Vect m Char -> Vect n Char -> Vect (m+n) Char
 tilt {n=Z}     {m} acc [] = rewrite plusZeroRightNeutral m in acc
-tilt {n=(S k)} {m} acc ('.'::xs) = rewrite plusSuccRightSucc' m k in tilt ('.'::acc) xs
-tilt {n=(S k)} {m} acc ('O'::xs) = rewrite plusSuccRightSucc' m k in 'O'::tilt [] (acc ++ xs)
+tilt {n=(S k)} {m} acc ('.'::xs) = rewrite sym $ plusSuccRightSucc m k in tilt ('.'::acc) xs
+tilt {n=(S k)} {m} acc ('O'::xs) = rewrite sym $ plusSuccRightSucc m k in 'O'::tilt [] (acc ++ xs)
 tilt {n=(S k)} {m} acc (x::xs) = acc ++ (x :: tilt [] xs)
 
 Board : Nat -> Nat -> Type
