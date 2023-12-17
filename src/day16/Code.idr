@@ -29,19 +29,18 @@ Show CellType where
         V => "|"
 
 parseCellType : Char -> CellType 
-parseCellType '.' = S
-parseCellType '/' = F
+parseCellType '.'  = S
+parseCellType '/'  = F
 parseCellType '\\' = B
-parseCellType '-' = H
-parseCellType '|' = V
-parseCellType  _  = S
+parseCellType '-'  = H
+parseCellType '|'  = V
+parseCellType  _   = S
 
 
 record Cell where
     constructor MkCell
     t : CellType
-    energized : (Bool, Bool, Bool, Bool)
-
+    energized : Vect 4 Bool
 
 data Dir = Up | Down | Left | Right
 
@@ -70,72 +69,53 @@ getCell matrix (row, col) =
         elem := index col line
     in elem
 
-goUp : (Fin n, Fin m) -> Maybe (Dir, (Fin n, Fin m))
-goUp (FZ, _) = Nothing
-goUp ((FS x), y) = Just (Up, (weaken x, y))
+forwardMirror : Dir -> Dir
+forwardMirror = \case {Up=>Right; Down=>Left; Left=>Down; Right=>Up}
 
-goDown : {n:Nat} -> (Fin n, Fin m) -> Maybe (Dir, (Fin n, Fin m))
-goDown (x, y) =
-    case strengthen (FS x) of 
-        Nothing => Nothing
-        Just sx => Just (Down, (sx, y))
+backwardMirror : Dir -> Dir
+backwardMirror = \case {Up=>Left; Down=>Right; Left=>Up; Right=>Down}
 
-goLeft : (Fin n, Fin m) -> Maybe (Dir, (Fin n, Fin m))
-goLeft (_, FZ) = Nothing
-goLeft (x, (FS y)) = Just (Left, (x, weaken y))
+vertSplitter1 : Dir -> Dir
+vertSplitter1 = \case {Up=>Up; Down=>Down; Left=>Up; Right=>Up}
 
-goRight : {m:Nat} -> (Fin n, Fin m) -> Maybe (Dir, (Fin n, Fin m))
-goRight (x, y) =
-    case strengthen (FS y) of 
-        Nothing => Nothing
-        Just sy => Just (Right, (x, sy))
+vertSplitter2 : Dir -> Dir
+vertSplitter2 = \case {Up=>Up; Down=>Down; Left=>Down; Right=>Down}
+
+horizSplitter1 : Dir -> Dir
+horizSplitter1 = \case {Up=>Right; Down=>Right; Left=>Left; Right=>Right}
+
+horizSplitter2 : Dir -> Dir
+horizSplitter2 = \case {Up=>Left; Down=>Left; Left=>Left; Right=>Right}
 
 nextSteps : {n, m : Nat} -> CellType -> (Fin n, Fin m) -> Dir -> List (Maybe (Dir, (Fin n, Fin m)))
 nextSteps t pos dir =
-    case (dir, t) of
-        (Right, S) => [goRight pos]
-        (Left,  S) => [goLeft pos]
-        (Up,    S) => [goUp pos]
-        (Down,  S) => [goDown pos]
-        (Right, F) => [goUp pos]
-        (Left,  F) => [goDown pos]
-        (Up,    F) => [goRight pos]
-        (Down,  F) => [goLeft pos]
-        (Right, B) => [goDown pos]
-        (Left,  B) => [goUp pos]
-        (Up,    B) => [goLeft pos]
-        (Down,  B) => [goRight pos]
-        (Right, V) => [goUp pos, goDown pos]
-        (Left,  V) => [goUp pos, goDown pos]
-        (Up,    V) => [goUp pos]
-        (Down,  V) => [goDown pos]
-        (Right, H) => [goRight pos]
-        (Left,  H) => [goLeft pos]
-        (Up,    H) => [goRight pos, goLeft pos]
-        (Down,  H) => [goRight pos, goLeft pos]
+    case t of
+        S => [next pos dir]
+        F => [next pos $ forwardMirror dir]
+        B => [next pos $ backwardMirror dir]
+        V => [next pos $ vertSplitter1 dir, next pos $ vertSplitter2 dir]
+        H => [next pos $ horizSplitter1 dir, next pos $ horizSplitter2 dir]
+    where
+        next : (Fin n, Fin m) -> Dir -> Maybe (Dir, (Fin n, Fin m))
+        next (row, col) dir =
+            case dir of
+                Up => case row of FZ => Nothing; FS x => Just (Up, (weaken x, col))
+                Down => do newRow <- strengthen (FS row); pure (Down, (newRow, col))
+                Left => case col of FZ => Nothing; FS y => Just (Left, (row, weaken y))
+                Right => do newCol <- strengthen (FS col); pure (Right, (row, newCol))
 
-isEnergized : Dir -> (Bool, Bool, Bool, Bool) -> Bool 
-isEnergized dir (u, d, l, r) =
-    case dir of
-        Up => u
-        Down => d
-        Left => l
-        Right => r
+enterBefore : Vect 4 Bool -> Dir -> Bool 
+enterBefore [u, d, l, r] = \case {Up => u; Down => d; Left => l; Right => r}
 
 energize : Cell -> Dir -> Cell
-energize (MkCell t (u, d, l, r)) dir =
-    case dir of
-        Up => MkCell t (True, d, l, r)
-        Down => MkCell t (u, True, l, r)
-        Left => MkCell t (u, d, True, r)
-        Right => MkCell t (u, d, l, True)
+energize (MkCell t [u, d, l, r]) = \case {Up => MkCell t [True, d, l, r]; Down => MkCell t [u, True, l, r]; Left => MkCell t [u, d, True, r]; Right => MkCell t [u, d, l, True]}
 
 process : {n, m : Nat} -> Board n m -> (Fin n, Fin m) -> Dir -> Board n m
 process board pos@(row, col) dir = 
     let cell@(MkCell t e) := getCell board pos
     in
-        if isEnergized dir e then board
-        else foldl 
+        if (enterBefore e dir) then board
+        else foldl
             (\b, step => case step of 
                 Nothing => b 
                 Just (nextDir, nextPos) => 
@@ -144,47 +124,35 @@ process board pos@(row, col) dir =
             (replaceAt row (replaceAt col (energize cell dir) $ index row board) board)
             (nextSteps t pos dir )
 
-
-cal1 : {n, m : Nat} -> Board n m -> Nat 
-cal1 [] = 0
-cal1 (row :: rows) = cal row + cal1 rows
+calculate : {n, m : Nat} -> Board n m -> Nat 
+calculate [] = 0
+calculate (row :: rows) = cal row + calculate rows
     where
         cal : Vect l Cell -> Nat
         cal [] = 0
-        cal (MkCell _ (u, d, l, r) ::xs) = if u || d || r || l then S $ cal xs else cal xs
+        cal (MkCell _ [u, d, l, r] ::xs) = if u || d || r || l then S $ cal xs else cal xs
 
 parseBoard : (m : Nat) -> (lines : List String) -> List (Vect m Cell)
 parseBoard _ [] = []
 parseBoard m (l :: ls) =
     let chars := unpack $ trim l in
     case decEq (length chars) m of
-        (Yes Refl) => ((\c => MkCell (parseCellType c) (False, False, False, False)) <$> fromList chars) :: parseBoard m ls
+        (Yes Refl) => ((\c => MkCell (parseCellType c) [False, False, False, False]) <$> fromList chars) :: parseBoard m ls
         (No _) => parseBoard m ls
-
-showFlow : (Bool, Bool, Bool, Bool) -> String
-showFlow (False, False, False, False) = "."
-showFlow (False, False, False, True)  = ">"
-showFlow (False, False, True,  False) = "<"
-showFlow (False, False, True,  True)  = "2"
-showFlow (False, True,  False, False) = "v"
-showFlow (False, True,  False, True)  = "2"
-showFlow (False, True,  True,  False) = "2"
-showFlow (False, True,  True,  True)  = "3"
-showFlow (True,  False, False, False) = "^"
-showFlow (True,  False, False, True)  = "2"
-showFlow (True,  False, True,  False) = "2"
-showFlow (True,  False, True,  True)  = "3"
-showFlow (True,  True,  False, False) = "2"
-showFlow (True,  True,  False, True)  = "3"
-showFlow (True,  True,  True,  False) = "3"
-showFlow (True,  True,  True,  True)  = "4"
 
 printBoard : {n, m : Nat} -> Board n m -> IO ()
 printBoard [] = do pure ()
 printBoard (x :: xs) = do
     printRow x
     printBoard xs
-    where   
+    where
+        showFlow : Vect 4 Bool -> String
+        showFlow flow =
+            case sum $ (\b => if b then 1 else 0) <$> flow of
+                0 => "."
+                1 => foldl (\acc, (b,c) => acc ++ if b then c else "") "" (zip flow ["^", "v", "<", ">"])
+                x => show x
+
         printRow : Vect k Cell -> IO ()
         printRow row = do 
             printLn $ joinBy "" $ toList $
@@ -202,11 +170,11 @@ main =
             (p::ps) := parseBoard (S cols) (l::lines) | [] => printLn "Error parse file"
             initBoard := fromList (p::ps)
 
-        printLn $ "Part I result: " ++ (show $ cal1 $ process initBoard (FZ, FZ) Right)
+        printLn $ "Part I result: " ++ (show $ calculate $ process initBoard (FZ, FZ) Right)
 
-        let left := foldl (\acc, f => (cal1 $ process initBoard (f, FZ) Right) :: acc) (the (List Nat) []) (allFins (length ps))
-        let right := foldl (\acc, f => (cal1 $ process initBoard (f, last) Left) :: acc) (the (List Nat) []) (allFins (length ps))
-        let top := foldl (\acc, f => (cal1 $ process initBoard (FZ, f) Down) :: acc) (the (List Nat) []) (allFins cols)
-        let bottom := foldl (\acc, f => (cal1 $ process initBoard (last, f) Up) :: acc) (the (List Nat) []) (allFins cols)
+        let left := foldl (\acc, f => (calculate $ process initBoard (f, FZ) Right) :: acc) (the (List Nat) []) (allFins (length ps))
+        let right := foldl (\acc, f => (calculate $ process initBoard (f, last) Left) :: acc) (the (List Nat) []) (allFins (length ps))
+        let top := foldl (\acc, f => (calculate $ process initBoard (FZ, f) Down) :: acc) (the (List Nat) []) (allFins cols)
+        let bottom := foldl (\acc, f => (calculate $ process initBoard (last, f) Up) :: acc) (the (List Nat) []) (allFins cols)
         printLn $ "Part II result: " ++ (show $ foldl (\acc, e => if e > acc then e else acc) 0 (left ++ right ++ top ++ bottom))
         pure ()
